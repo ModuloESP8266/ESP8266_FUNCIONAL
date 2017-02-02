@@ -34,7 +34,7 @@ const int channel=11;
 const int hidden=0;
 
 int cont_mqtt=0;
-
+String Wan=" ";
 ESP8266WebServer server(80);
 
 
@@ -62,7 +62,7 @@ int ServerWan_tamano = 0;
 int ServerLan_tamano = 0;
 
 ////// ADDRESS EEPROM
-
+int dir_modo= 0; //0=normal 1 configuracion
 int dir_conf = 70;
 int dir_ssid = 1;
 int dir_pass = 30;
@@ -123,10 +123,164 @@ String pral = "<html>"
 
 /********************* FIN DECLARACION DE VARIABLES   *************************/
 
-/////////////   MQTT //////////////////// 
+
+
+
+
+void setup(){
+  
+  pinMode(Boton_EEPROM, INPUT);
+  pinMode(LED,OUTPUT);
+   
+  attachInterrupt( digitalPinToInterrupt(Boton_EEPROM), ServicioBoton, RISING);
+  attachInterrupt( digitalPinToInterrupt(sw), ServicioBoton2, RISING);
+
+  
+  
+  Serial.begin(115200);
+  Serial.println();
+  Serial.println();
+
+  EEPROM.begin(1024);
+  delay(10);
+  
+  value = EEPROM.read(0);//carga el valor 1 si no esta configurado o 0 si esta configurado
+  delay(10);
+  Serial.print("value: ");
+  Serial.println(value);
+  delay(10);
+  ReadDataEprom();
+  delay(10);
+  Serial.print("Configuracion: ");
+  Serial.println(lee(dir_conf));
+/*
+  switch(value){
+    
+    case 0: Serial.println("**********MODO NORMAL************");
+            pinMode(sw, INPUT_PULLUP);
+            pinMode(relay,OUTPUT);
+            digitalWrite(relay,true);
+            WiFi.mode(WIFI_STA);
+            intento_conexion();
+            break;
+            
+    case 1: delay(10);
+            Serial.println("**********MODO CONFIGURACION************");
+            scanWIFIS();
+            Serial.print("Configuring access point...");
+            WiFi.mode(WIFI_AP);
+            WiFi.softAP(ssid_AP, password_AP,channel,hidden);// (*char SSID,*char PASS,int CHANNEL,int HIDDEN=1 NO_HIDDEN=0)
+            IPAddress myIP = WiFi.softAPIP();
+            Serial.print("AP IP address: ");
+            Serial.println(myIP);
+            server.on("/", []() {server.send(200, "text/html", pral);});
+            server.on("/config", wifi_conf);
+            server.begin();
+            Serial.println("**********  Webserver iniciado ***************");
+            Serial.print("ssid: "); Serial.println(ssid_AP);
+            Serial.print("password: "); Serial.println(password_AP);
+            Serial.print("channel: "); Serial.println(channel);
+            Serial.print("hidden: "); Serial.println(hidden);
+            Serial.println();
+            break;
+            
+     default:Serial.println("Modo desconocido");
+        
+    }*/
+
+  
+  if(value){
+   delay(10);
+            Serial.println("**********MODO CONFIGURACION************");
+            scanWIFIS();
+            Serial.print("Configuring access point...");
+            WiFi.mode(WIFI_AP);
+            WiFi.softAP(ssid_AP, password_AP,channel,hidden);// (*char SSID,*char PASS,int CHANNEL,int HIDDEN=1 NO_HIDDEN=0)
+            IPAddress myIP = WiFi.softAPIP();
+            Serial.print("AP IP address: ");
+            Serial.println(myIP);
+            server.on("/", []() {server.send(200, "text/html", pral);});
+            server.on("/config", wifi_conf);
+            server.begin();
+            Serial.println("**********  Webserver iniciado ***************");
+            Serial.print("ssid: "); Serial.println(ssid_AP);
+            Serial.print("password: "); Serial.println(password_AP);
+            Serial.print("channel: "); Serial.println(channel);
+            Serial.print("hidden: "); Serial.println(hidden);
+            Serial.println();
+
+  }else{
+     Serial.println("**********MODO NORMAL************");
+            pinMode(sw, INPUT_PULLUP);
+            pinMode(relay,OUTPUT);
+            digitalWrite(relay,true);
+            WiFi.mode(WIFI_STA);
+            intento_conexion();
+
+  }
+  
+
+  modo=0;//normal
+  EEPROM.write(0,modo);
+  EEPROM.commit();
+/*
+ Wan=lee(dir_serverwan);
+
+Wan= arregla_simbolos(Wan);
+int Wan_tamano = Wan.length() + 1;
+Wan.toCharArray=(ServerWan,Wan_tamano);
+*/
+
+}
+
+
 
 WiFiClient wifiClient;
+
+
 PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
+
+void loop(){
+server.handleClient();
+
+  delay(10); 
+ //maintain MQTT connection
+  client.loop();
+
+  //MUST delay to allow ESP8266 WIFI functions to run
+  delay(10); 
+
+
+  if (n != contador)
+  
+           {  blink50();
+             // timer0_detachInterrupt();
+              n = contador ;
+              modo=1;
+              EEPROM.write(0,modo);
+              EEPROM.commit();
+              delay(10);
+              ESP.restart();
+              
+         }
+   if (n2 != contador2)
+  
+           {  n2 = contador2 ;
+              Serial.println("Relay!!");
+              digitalWrite(relay,!digitalRead(relay));
+              if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");}
+              else{client.publish("prueba/light1/confirm", "Light1 Off");}
+           
+         }
+}
+
+
+
+
+/*******************  INICIO DECLARACION DE FUNCIONES        *********************************/
+
+/////////////   MQTT //////////////////// 
+
 
 void callback(char* topic, byte* payload, unsigned int length) {
 
@@ -158,95 +312,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
 /////////////// FIN MQTT //////////////////////
 
 
-
-void setup(){
-  
-  pinMode(Boton_EEPROM, INPUT);
-  pinMode(LED,OUTPUT);
-   
-  attachInterrupt( digitalPinToInterrupt(Boton_EEPROM), ServicioBoton, RISING);
-  attachInterrupt( digitalPinToInterrupt(sw), ServicioBoton2, RISING);
-
-  
-  
-  Serial.begin(115200);
-  Serial.println();
-  Serial.println();
-
-  EEPROM.begin(1024);
-  delay(10);
-  
-  value = EEPROM.read(0);//carga el valor 1 si no esta configurado o 0 si esta configurado
-  delay(10);
-//   Serial.print("value: ");
-//   Serial.println(value);
-//   delay(10);
-//   ReadDataEprom();
-//   delay(10);
-  Serial.print("Configuracion: ");
-  Serial.println(lee(dir_conf));
-  if(lee(dir_conf)=="noconfigurado"){
-    value=1;
-    }
-  if(value){
-    delay(10);
-    Serial.println("**********MODO CONFIGURACION************");
-    scanWIFIS();
-    Serial.print("Configuring access point...");
-    WiFi.mode(WIFI_AP);
-    WiFi.softAP(ssid_AP, password_AP,channel,hidden);// (*char SSID,*char PASS,int CHANNEL,int HIDDEN=1 NO_HIDDEN=0)
-    IPAddress myIP = WiFi.softAPIP();
-    Serial.print("AP IP address: ");
-    Serial.println(myIP);
-    server.on("/", []() {server.send(200, "text/html", pral);});
-    server.on("/config", wifi_conf);
-    server.begin();
-    Serial.println("**********  Webserver iniciado ***************");
-    Serial.print("ssid: "); Serial.println(ssid_AP);
-    Serial.print("password: "); Serial.println(password_AP);
-    Serial.print("channel: "); Serial.println(channel);
-    Serial.print("hidden: "); Serial.println(hidden);
-    Serial.println();
-
-  }else{
-    Serial.println("nada");
-  }
-  
-
-
-}
-
-
-void loop(){
-server.handleClient();
-
-  delay(10); 
-
-
-  if (n != contador)
-  
-           {  blink50();
-              timer0_detachInterrupt();
-              n = contador ;
-              modo=1;
-              EEPROM.write(0,modo);
-              EEPROM.commit();
-              delay(10);
-             // ESP.restart();
-              
-         }
-   if (n2 != contador2)
-  
-           {  n2 = contador2 ;
-              Serial.println("Relay!!");
-              digitalWrite(relay,!digitalRead(relay));
-              if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");}
-              else{client.publish("prueba/light1/confirm", "Light1 Off");}
-           
-         }
-}
-
-/*******************  INICIO DECLARACION DE FUNCIONES        *********************************/
 
 void intento_conexion() {
   
@@ -296,7 +361,7 @@ void intento_conexion() {
     
      // mosquitto
     
-        while (!client.connected()) {
+    while (!client.connected()) {
       Serial.println("Attempting MQTT connection...");
 
       // Generate client name based on MAC address and last 8 bits of microsecond counter
@@ -389,13 +454,19 @@ void wifi_conf() {
     cuenta++;
     if (cuenta > 20) {
       graba(dir_conf, "noconfigurado");
+      EEPROM.write(dir_modo,1);
+      EEPROM.commit();;
       server.send(200, "text/html", String("<h2>No se pudo realizar la conexion<br>no se guardaron los datos.</h2>"));
       return;
     }
   }
   
+  Serial.print("Cuenta: ");
+  Serial.println(cuenta);
   Serial.print(WiFi.localIP());
   graba(dir_conf, "configurado");
+  EEPROM.write(dir_modo,0);
+  EEPROM.commit();
   graba(dir_ssid, getssid);
   graba(dir_pass, getpass);
   graba(dir_topic1, getTopic1);
