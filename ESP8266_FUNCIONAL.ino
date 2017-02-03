@@ -153,44 +153,14 @@ void setup(){
   delay(10);
   Serial.print("Configuracion: ");
   Serial.println(lee(dir_conf));
-/*
-  switch(value){
+  if(lee(dir_conf)!="configurado"){
+    value=1;
     
-    case 0: Serial.println("**********MODO NORMAL************");
-            pinMode(sw, INPUT_PULLUP);
-            pinMode(relay,OUTPUT);
-            digitalWrite(relay,true);
-            WiFi.mode(WIFI_STA);
-            intento_conexion();
-            break;
-            
-    case 1: delay(10);
-            Serial.println("**********MODO CONFIGURACION************");
-            scanWIFIS();
-            Serial.print("Configuring access point...");
-            WiFi.mode(WIFI_AP);
-            WiFi.softAP(ssid_AP, password_AP,channel,hidden);// (*char SSID,*char PASS,int CHANNEL,int HIDDEN=1 NO_HIDDEN=0)
-            IPAddress myIP = WiFi.softAPIP();
-            Serial.print("AP IP address: ");
-            Serial.println(myIP);
-            server.on("/", []() {server.send(200, "text/html", pral);});
-            server.on("/config", wifi_conf);
-            server.begin();
-            Serial.println("**********  Webserver iniciado ***************");
-            Serial.print("ssid: "); Serial.println(ssid_AP);
-            Serial.print("password: "); Serial.println(password_AP);
-            Serial.print("channel: "); Serial.println(channel);
-            Serial.print("hidden: "); Serial.println(hidden);
-            Serial.println();
-            break;
-            
-     default:Serial.println("Modo desconocido");
-        
-    }*/
-
+    }
+  
   
   if(value){
-   delay(10);
+            delay(10);
             Serial.println("**********MODO CONFIGURACION************");
             scanWIFIS();
             Serial.print("Configuring access point...");
@@ -209,13 +179,14 @@ void setup(){
             Serial.print("hidden: "); Serial.println(hidden);
             Serial.println();
 
-  }else{
-     Serial.println("**********MODO NORMAL************");
-            pinMode(sw, INPUT_PULLUP);
-            pinMode(relay,OUTPUT);
-            digitalWrite(relay,true);
-            WiFi.mode(WIFI_STA);
-            intento_conexion();
+  }
+  else{
+           Serial.println("**********MODO NORMAL************");
+           pinMode(sw, INPUT_PULLUP);
+           pinMode(relay,OUTPUT);
+           digitalWrite(relay,true);
+           WiFi.mode(WIFI_STA);
+           intento_conexion();
 
   }
   
@@ -241,41 +212,49 @@ WiFiClient wifiClient;
 PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
 
 void loop(){
-server.handleClient();
+  if(value){
+        server.handleClient();
+        delay(500);
+        digitalWrite(LED,!digitalRead(LED));
+        
+        }
+  else{ 
+        //maintain MQTT connection
+        client.loop();
+        delay(10);
 
-  delay(10); 
- //maintain MQTT connection
-  client.loop();
-
-  //MUST delay to allow ESP8266 WIFI functions to run
-  delay(10); 
-
-
-  if (n != contador)
-  
-           {  blink50();
-             // timer0_detachInterrupt();
+        if (WiFi.status() == WL_CONNECTED) {
+            
+            digitalWrite(LED,true);
+            reconexionMQTT();
+         }else{
+           digitalWrite(LED,false);
+           intento_conexion();
+           }
+       
+        //MUST delay to allow ESP8266 WIFI functions to run
+        delay(10); 
+      
+         
+        if (n2 != contador2){
+              n2 = contador2 ;
+              Serial.println("Relay!!");
+              digitalWrite(relay,!digitalRead(relay));
+              if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");}
+              else{client.publish("prueba/light1/confirm", "Light1 Off");}
+             }
+       
+       }
+    if (n != contador){
+             blink50();
               n = contador ;
               modo=1;
               EEPROM.write(0,modo);
               EEPROM.commit();
               delay(10);
-              ESP.restart();
-              
-         }
-   if (n2 != contador2)
-  
-           {  n2 = contador2 ;
-              Serial.println("Relay!!");
-              digitalWrite(relay,!digitalRead(relay));
-              if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");}
-              else{client.publish("prueba/light1/confirm", "Light1 Off");}
-           
+              ESP.reset();       
          }
 }
-
-
-
 
 /*******************  INICIO DECLARACION DE FUNCIONES        *********************************/
 
@@ -309,15 +288,68 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
 }
 
+void reconexionMQTT(){
+
+    int cuenta=0;
+    
+    while (!client.connected()) {
+      
+       if (WiFi.status() != WL_CONNECTED) {
+        ESP.reset();
+        
+        }
+       if (n != contador){
+             blink50();
+              n = contador ;
+              modo=1;
+              EEPROM.write(0,modo);
+              EEPROM.commit();
+              delay(10);
+              ESP.reset();       
+         }
+      Serial.println("Attempting MQTT connection...");
+
+      // Generate client name based on MAC address and last 8 bits of microsecond counter
+      String clientName;
+      
+      clientName += "esp8266-";
+      uint8_t mac[6];
+      WiFi.macAddress(mac);
+      clientName += macToStr(mac);
+       Serial.println(clientName);
+
+      //if connected, subscribe to the topic(s) we want to be notified about
+      if (client.connect((char*) clientName.c_str(),"diego","24305314")){
+        Serial.println("MTQQ Connected");
+        client.subscribe(Topic1);
+        //client.subscribe(Topic2);
+         digitalWrite(LED,true);// wifi + mqtt ok !!!
+      }
+      //otherwise print failed for debugging
+      else{
+           digitalWrite(LED,true);
+           Serial.println("Failed  connection mqtt.");
+           Serial.print("Client state: ");
+           Serial.println(client.state());
+           Serial.println(" try again in 3 seconds");
+           // Wait 3 seconds before retrying
+           blinkLento();
+           cuenta++;   
+           if(cuenta>4){
+              abort();
+             }
+         }
+    }
+      
+  
+  }
+
 /////////////// FIN MQTT //////////////////////
-
-
 
 void intento_conexion() {
   
   if (lee(dir_conf).equals("configurado")) {
-  
-    
+     
     Serial.print("SSID: ");  //Para depuracion
     Serial.println(ssid_leido);  //Para depuracion
     Serial.print("PASS: ");  //Para depuracion
@@ -347,56 +379,22 @@ void intento_conexion() {
       delay(400);
       blink50();
       cuenta++;
-      
       if (cuenta > 20) {
         Serial.println("Fallo al conectar");
         return;
       }
     }
   }
+  
   if (WiFi.status() == WL_CONNECTED) {
     Serial.print("Conexion exitosa a: ");
     Serial.println(ssid);
     Serial.println(WiFi.localIP());
-    
-     // mosquitto
-    
-    while (!client.connected()) {
-      Serial.println("Attempting MQTT connection...");
-
-      // Generate client name based on MAC address and last 8 bits of microsecond counter
-      String clientName;
-      
-      clientName += "esp8266-";
-      uint8_t mac[6];
-      WiFi.macAddress(mac);
-      clientName += macToStr(mac);
-       Serial.println(clientName);
-
-      //if connected, subscribe to the topic(s) we want to be notified about
-      if (client.connect((char*) clientName.c_str(),"diego","24305314")){
-        Serial.println("MTQQ Connected");
-        client.subscribe(Topic1);
-        //client.subscribe(Topic2);
-      }
-
-      //otherwise print failed for debugging
-      else{Serial.println("Failed.");
-        abort();
-       
-      
-      }
-    }
-      
-    
-    blink50();
     digitalWrite(LED,true);
-   
-  }
+    reconexionMQTT();
+   }
  
- //timer0_detachInterrupt();
-  
-}
+ }
 
 //**** CONFIGURACION WIFI  *******
 void wifi_conf() {
@@ -480,7 +478,7 @@ void wifi_conf() {
   + "<br> Server Lan MQTT: " + getTopic2 + ".<br>" 
   + "<br>El equipo se reiniciara Conectandose a la red configurada."));
   //delay(50);
-  ESP.restart();
+  ESP.reset();
 }
 
 void ServicioBoton(){
@@ -553,6 +551,24 @@ void blink50(){
    
   }
 
+ void blinkLento(){
+ 
+    digitalWrite(LED,false);
+    delay(500);   
+    digitalWrite(LED,true);
+    delay(500);
+    digitalWrite(LED,false);
+    delay(500);
+    digitalWrite(LED,true);
+    delay(500);
+    digitalWrite(LED,false);
+    delay(500);
+    digitalWrite(LED,true);
+    delay(500);
+  
+  }
+
+
 //*******  G R A B A R  EN LA  E E P R O M  ***********
 void graba(int addr, String a) {
   int tamano = (a.length() + 1);
@@ -579,7 +595,6 @@ String lee(int addr) {
   }
   return nuevoString;
 }
- 
 
 void ReadDataEprom(){
   
@@ -629,6 +644,7 @@ void ReadDataEprom(){
   
   
   }
+
 
 /****************** FIN DECLARACION DE FUNCIONES  ****************************/
 
