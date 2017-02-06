@@ -6,8 +6,11 @@
 
 
 //EDIT THESE LINES TO MATCH YOUR SETUP
-#define MQTT_SERVER "192.168.0.106"
+#define MQTT_SERVER_LAN "192.168.0.106"
 #define MQTT_SERVER_WAN "idirect.dlinkddns.com"
+
+char* SERVER_LAN = " ";
+char* SERVER_WAN =" ";
 
 /////////// antirebote /////////////
 volatile int contador = 0;   // Somos de lo mas obedientes
@@ -35,15 +38,15 @@ const int hidden=0;
 
 int cont_mqtt=0;
 String Wan=" ";
-ESP8266WebServer server(80);
 
+ESP8266WebServer server(80);
 
 char ssid[20];
 char pass[20];
 char Topic1[20];
 char Topic2[20];
-char ServerWan[40]={'i','d','i','r','e','c','t','.','d','l','i','n','k','.','c','o','m'};
-char ServerLan[20]={'1','9','2','.','1','6','8','.','0','.','1','0','6'};
+char ServerWan[40];
+char ServerLan[20];
 
 String ssid_leido;
 String pass_leido;
@@ -70,8 +73,6 @@ int dir_topic1 = 100;
 int dir_topic2 = 130;
 int dir_serverwan = 150;
 int dir_serverlan = 190;
-
-
 
 String arregla_simbolos(String a) {
   a.replace("%C3%A1", "Ã¡");
@@ -121,8 +122,11 @@ String pral = "<html>"
               "</body>"
               "</html>";
 
-/********************* FIN DECLARACION DE VARIABLES   *************************/
 
+
+WiFiClient wifiClient;
+
+/********************* FIN DECLARACION DE VARIABLES   *************************/
 
 
 
@@ -131,11 +135,12 @@ void setup(){
   
   pinMode(Boton_EEPROM, INPUT);
   pinMode(LED,OUTPUT);
-   
+  pinMode(sw, INPUT_PULLUP);
+  pinMode(relay,OUTPUT);
+  //digitalWrite(relay,false);
+  
   attachInterrupt( digitalPinToInterrupt(Boton_EEPROM), ServicioBoton, RISING);
   attachInterrupt( digitalPinToInterrupt(sw), ServicioBoton2, RISING);
-
-  
   
   Serial.begin(115200);
   Serial.println();
@@ -157,8 +162,7 @@ void setup(){
     value=1;
     
     }
-  
-  
+    
   if(value){
             delay(10);
             Serial.println("**********MODO CONFIGURACION************");
@@ -179,37 +183,28 @@ void setup(){
             Serial.print("hidden: "); Serial.println(hidden);
             Serial.println();
 
-  }
-  else{
-           Serial.println("**********MODO NORMAL************");
-           pinMode(sw, INPUT_PULLUP);
-           pinMode(relay,OUTPUT);
-           digitalWrite(relay,true);
+      }
+  else{    Serial.println("**********MODO NORMAL************");  
+         
+           
+           ServerLan_leido= lee(dir_serverlan);
+           ServerWan_leido= lee(dir_serverwan);
+           ServerLan_tamano = ServerLan_leido.length() + 1;  //Calculamos la cantidad de caracteres que tiene el ssid y la clave
+           ServerWan_tamano = ServerWan_leido.length() + 1;
+           ServerLan_leido.toCharArray(SERVER_LAN, ServerLan_tamano); //Transf. el String en un char array ya que es lo que nos pide WiFi.begin()
+           ServerWan_leido.toCharArray(SERVER_WAN, ServerWan_tamano);
+           
            WiFi.mode(WIFI_STA);
+           
            intento_conexion();
-
-  }
+    }
   
-
   modo=0;//normal
   EEPROM.write(0,modo);
   EEPROM.commit();
-/*
- Wan=lee(dir_serverwan);
-
-Wan= arregla_simbolos(Wan);
-int Wan_tamano = Wan.length() + 1;
-Wan.toCharArray=(ServerWan,Wan_tamano);
-*/
-
 }
 
-
-
-WiFiClient wifiClient;
-
-
-PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
+PubSubClient client(MQTT_SERVER_LAN, 1883, callback, wifiClient);
 
 void loop(){
   if(value){
@@ -219,12 +214,10 @@ void loop(){
         
         }
   else{ 
-        //maintain MQTT connection
-        client.loop();
-        delay(10);
-
-        if (WiFi.status() == WL_CONNECTED) {
-            
+       //maintain MQTT connection
+       client.loop();
+       delay(10);
+       if (WiFi.status() == WL_CONNECTED) { 
             digitalWrite(LED,true);
             reconexionMQTT();
          }else{
@@ -233,15 +226,15 @@ void loop(){
            }
        
         //MUST delay to allow ESP8266 WIFI functions to run
-        delay(10); 
-      
-         
+        delay(10);   
         if (n2 != contador2){
-              n2 = contador2 ;
-              Serial.println("Relay!!");
-              digitalWrite(relay,!digitalRead(relay));
-              if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");}
-              else{client.publish("prueba/light1/confirm", "Light1 Off");}
+            n2 = contador2 ;
+            digitalWrite(relay,!digitalRead(relay));
+            if(digitalRead(relay)){client.publish("prueba/light1/confirm", "Light1 On");
+                                        Serial.println("Relay ON!!");
+                                      }
+             else{client.publish("prueba/light1/confirm", "Light1 Off");
+                     Serial.println("Relay OFF!!");}
              }
        
        }
@@ -260,7 +253,6 @@ void loop(){
 
 /////////////   MQTT //////////////////// 
 
-
 void callback(char* topic, byte* payload, unsigned int length) {
 
   //convert topic to string to make it easier to work with
@@ -270,7 +262,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   Serial.println("Callback update.");
   Serial.print("Topic: ");
   Serial.println(topicStr);
-
   
    if(topicStr == Topic1){
 
@@ -296,10 +287,10 @@ void reconexionMQTT(){
       
        if (WiFi.status() != WL_CONNECTED) {
         ESP.reset();
+       }
         
-        }
-       if (n != contador){
-             blink50();
+       if (n != contador){ // consulta si se oprimio el boton de MODO CONFIGURACION
+              blink50();
               n = contador ;
               modo=1;
               EEPROM.write(0,modo);
@@ -307,7 +298,10 @@ void reconexionMQTT(){
               delay(10);
               ESP.reset();       
          }
-      Serial.println("Attempting MQTT connection...");
+ 
+       BotonSW();
+      
+       Serial.println("Attempting MQTT connection...");
 
       // Generate client name based on MAC address and last 8 bits of microsecond counter
       String clientName;
@@ -321,7 +315,8 @@ void reconexionMQTT(){
       //if connected, subscribe to the topic(s) we want to be notified about
       if (client.connect((char*) clientName.c_str(),"diego","24305314")){
         Serial.println("MTQQ Connected");
-        client.subscribe(Topic1);
+        //client.subscribe(Topic1);
+         client.subscribe(Topic1);
         //client.subscribe(Topic2);
          digitalWrite(LED,true);// wifi + mqtt ok !!!
       }
@@ -335,8 +330,10 @@ void reconexionMQTT(){
            // Wait 3 seconds before retrying
            blinkLento();
            cuenta++;   
+           Serial.print("cuenta: ");Serial.println(cuenta);
            if(cuenta>4){
-              abort();
+            Serial.println("abortooo");
+              ESP.reset();
              }
          }
     }
@@ -357,11 +354,11 @@ void intento_conexion() {
     Serial.print("TOPIC 1: ");  //Para depuracion
     Serial.println(Topic1_leido);  //Para depuracion
     Serial.print("TOPIC 2: ");  //Para depuracion
-    Serial.println(Topic1_leido);
+    Serial.println(Topic2_leido);
     Serial.print("Server Lan MQTT: ");  //Para depuracion
-    Serial.println(ServerWan_leido);  //Para depuracion
-    Serial.print("Server Lan MQTT: ");  //Para depuracion
-    Serial.println(ServerLan_leido);
+    Serial.println(ServerLan_leido);  //Para depuracion
+    Serial.print("Server Wan MQTT: ");  //Para depuracion
+    Serial.println(ServerWan_leido);
 
     ssid_tamano = ssid_leido.length() + 1;  //Calculamos la cantidad de caracteres que tiene el ssid y la clave
     pass_tamano = pass_leido.length() + 1;
@@ -474,10 +471,10 @@ void wifi_conf() {
   server.send(200, "text/html", String("<h2>Conexion exitosa a: "+ getssid + "<br> Pass: '" + getpass + "' .<br>" 
   + "<br> Topic1: " + getTopic1 + ".<br>" 
   + "<br> Topic2: " + getTopic2 + ".<br>" 
-  + "<br> Server Wan MQTT: " + getTopic1 + ".<br>" 
-  + "<br> Server Lan MQTT: " + getTopic2 + ".<br>" 
+  + "<br> Server Wan MQTT: " + getServerWan + ".<br>" 
+  + "<br> Server Lan MQTT: " + getServerLan + ".<br>" 
   + "<br>El equipo se reiniciara Conectandose a la red configurada."));
-  //delay(50);
+  delay(50);
   ESP.reset();
 }
 
@@ -552,22 +549,28 @@ void blink50(){
   }
 
  void blinkLento(){
- 
+    
+    BotonSW();
     digitalWrite(LED,false);
-    delay(500);   
+    delay(250);
+    BotonSW();
+    delay(250);
+    BotonSW();   
     digitalWrite(LED,true);
-    delay(500);
+    delay(250);
+    BotonSW();
+    delay(250);
+    BotonSW();
     digitalWrite(LED,false);
-    delay(500);
+    delay(250);
+    BotonSW();
+    delay(250);
+    BotonSW();
     digitalWrite(LED,true);
-    delay(500);
-    digitalWrite(LED,false);
-    delay(500);
-    digitalWrite(LED,true);
-    delay(500);
-  
+    delay(250);
+    BotonSW();
+    delay(250);  
   }
-
 
 //*******  G R A B A R  EN LA  E E P R O M  ***********
 void graba(int addr, String a) {
@@ -648,7 +651,20 @@ void ReadDataEprom(){
 
 /****************** FIN DECLARACION DE FUNCIONES  ****************************/
 
-
+void BotonSW(){
+  
+   if (n2 != contador2){
+              n2 = contador2 ;
+            
+              digitalWrite(relay,!digitalRead(relay));
+              if(digitalRead(relay)){//client.publish("prueba/light1/confirm", "Light1 On");
+                                        Serial.println("Relay ON!!");
+                                      }
+              else{//client.publish("prueba/light1/confirm", "Light1 Off");
+                     Serial.println("Relay OFF!!");}
+             }
+  
+  }
 
 
 
