@@ -6,8 +6,8 @@
 
 
 //EDIT THESE LINES TO MATCH YOUR SETUP
-#define MQTT_SERVER_LAN "192.168.0.106"
-#define MQTT_SERVER_WAN "idirect.dlinkddns.com"
+#define MQTT_SERVER_LAN "192.168.1.106"
+#define MQTT_SERVER_WAN "giovanazzi.ddns.net"
 
 char* SERVER_LAN = " ";
 char* SERVER_WAN =" ";
@@ -204,7 +204,7 @@ void setup(){
   EEPROM.commit();
 }
 
-PubSubClient client(MQTT_SERVER_LAN, 1883, callback, wifiClient);
+PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
 
 void loop(){
   if(value){
