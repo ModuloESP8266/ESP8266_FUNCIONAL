@@ -209,9 +209,9 @@ PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
 void loop(){
   if(value){
         server.handleClient();
-        delay(500);
+        delay(300);
         digitalWrite(LED,!digitalRead(LED));
-        
+       
         }
   else{ 
        //maintain MQTT connection
@@ -268,12 +268,14 @@ void callback(char* topic, byte* payload, unsigned int length) {
       //turn the light on if the payload is '1' and publish to the MQTT server a confirmation message
         if(payload[0] == '1'){
           digitalWrite(relay, HIGH);
-          client.publish(Topic1+'/confirm', "Light1 On");
+          //client.publish(Topic1+'/confirm', "Light1 On");
+          client.publish("prueba/light1/confirm", "Light1 On");
           }
       //turn the light off if the payload is '0' and publish to the MQTT server a confirmation message
-        else if (payload[0] == '0'){
-          digitalWrite(relay, LOW);
-          client.publish(Topic1+'/confirm', "Light1 Off");
+        else// if (payload[0] == '0'){
+          {digitalWrite(relay, LOW);
+         // client.publish(Topic1+'/confirm', "Light1 Off");
+         client.publish("prueba/light1/confirm", "Light1 Off");
         }
    }
   
