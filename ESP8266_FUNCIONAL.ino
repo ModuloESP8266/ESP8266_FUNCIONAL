@@ -22,9 +22,11 @@ int n2 = contador2 ;
 long T02 = 0 ;  // Variable global para tiempo
 
 const int Boton_EEPROM=0;
-const int LED=2;
-const int sw=14;
-const int relay=12;
+const int LED=16;
+const int sw=12;
+const int swB=13;
+const int relay=4;
+const int relayB=5;
 
 volatile int tiempoLed=800000000;
 int address = 0;
@@ -136,7 +138,9 @@ void setup(){
   pinMode(Boton_EEPROM, INPUT);
   pinMode(LED,OUTPUT);
   pinMode(sw, INPUT_PULLUP);
+  pinMode(swB, INPUT_PULLUP);
   pinMode(relay,OUTPUT);
+  pinMode(relayB,OUTPUT);
   //digitalWrite(relay,false);
   
   attachInterrupt( digitalPinToInterrupt(Boton_EEPROM), ServicioBoton, RISING);
