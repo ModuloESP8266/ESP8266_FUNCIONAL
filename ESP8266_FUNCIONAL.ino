@@ -22,6 +22,7 @@ int n2 = contador2 ;
 long T02 = 0 ;  // Variable global para tiempo
 
 const int Boton_EEPROM=0;
+const int Boton=2;
 const int LED=16;
 const int sw=12;
 const int swB=13;
@@ -47,7 +48,7 @@ char ssid[20];
 char pass[20];
 char Topic1[20];
 char Topic2[20];
-char ServerWan[40];
+char ServerWan[30];
 char ServerLan[20];
 
 String ssid_leido;
@@ -136,6 +137,7 @@ WiFiClient wifiClient;
 void setup(){
   
   pinMode(Boton_EEPROM, INPUT);
+  pinMode(Boton, INPUT_PULLUP);
   pinMode(LED,OUTPUT);
   pinMode(sw, INPUT_PULLUP);
   pinMode(swB, INPUT_PULLUP);
@@ -148,20 +150,17 @@ void setup(){
   
   Serial.begin(115200);
   Serial.println();
-  Serial.println();
 
-  EEPROM.begin(1024);
+  EEPROM.begin(256);
   delay(10);
   
   value = EEPROM.read(0);//carga el valor 1 si no esta configurado o 0 si esta configurado
   delay(10);
-  Serial.print("value: ");
-  Serial.println(value);
-  delay(10);
   ReadDataEprom();
-  delay(10);
+  
   Serial.print("Configuracion: ");
   Serial.println(lee(dir_conf));
+  
   if(lee(dir_conf)!="configurado"){
     value=1;
     
@@ -170,16 +169,18 @@ void setup(){
   if(value){
             delay(10);
             Serial.println("**********MODO CONFIGURACION************");
-            scanWIFIS();
+             scanWIFIS();
             Serial.print("Configuring access point...");
             WiFi.mode(WIFI_AP);
             WiFi.softAP(ssid_AP, password_AP,channel,hidden);// (*char SSID,*char PASS,int CHANNEL,int HIDDEN=1 NO_HIDDEN=0)
             IPAddress myIP = WiFi.softAPIP();
             Serial.print("AP IP address: ");
             Serial.println(myIP);
+            
             server.on("/", []() {server.send(200, "text/html", pral);});
             server.on("/config", wifi_conf);
             server.begin();
+            
             Serial.println("**********  Webserver iniciado ***************");
             Serial.print("ssid: "); Serial.println(ssid_AP);
             Serial.print("password: "); Serial.println(password_AP);
@@ -213,7 +214,7 @@ PubSubClient client(MQTT_SERVER_WAN, 1883, callback, wifiClient);
 void loop(){
   if(value){
         server.handleClient();
-        delay(300);
+        delay(500);
         digitalWrite(LED,!digitalRead(LED));
        
         }
@@ -321,9 +322,9 @@ void reconexionMQTT(){
       //if connected, subscribe to the topic(s) we want to be notified about
       if (client.connect((char*) clientName.c_str(),"diego","24305314")){
         Serial.println("MTQQ Connected");
-        //client.subscribe(Topic1);
+        
          client.subscribe(Topic1);
-        //client.subscribe(Topic2);
+         client.subscribe(Topic2);
          digitalWrite(LED,true);// wifi + mqtt ok !!!
       }
       //otherwise print failed for debugging
@@ -654,9 +655,7 @@ void ReadDataEprom(){
   
   }
 
-
 /****************** FIN DECLARACION DE FUNCIONES  ****************************/
-
 void BotonSW(){
   
    if (n2 != contador2){
